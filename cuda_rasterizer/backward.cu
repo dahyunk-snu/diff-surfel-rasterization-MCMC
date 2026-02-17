@@ -244,9 +244,9 @@ renderCUDA(
 	float last_color[C] = { 0 };
 
 	// Gradient of pixel coordinate w.r.t. normalized
-	// screen-space viewport coordinates (-1 to 1).
-	const float ddelx_dx = 0.5f * float(W);
-	const float ddely_dy = 0.5f * float(H);
+	// screen-space viewport coordinates (-1 to 1)
+	const float ddelx_dx = 0.5 * W;
+	const float ddely_dy = 0.5 * H;
 
 	// Traverse all Gaussians
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
@@ -425,9 +425,11 @@ renderCUDA(
 				atomicAdd(&dL_dtransMat[global_id * 9 + 7],  dL_dTw.y);
 				atomicAdd(&dL_dtransMat[global_id * 9 + 8],  dL_dTw.z);
 
-				// Homodirectional gradient
-				atomicAdd(&dL_dmean2D[global_id].z, fabs(dL_dTu.z * Tw.z * ddelx_dx));
-				atomicAdd(&dL_dmean2D[global_id].w, fabs(dL_dTv.z * Tw.z * ddely_dy));
+				// Homodirectional Gradient
+				const float dG_ddelx = -G * FilterInvSquare * d.x;
+				const float dG_ddely = -G * FilterInvSquare * d.y;
+				atomicAdd(&dL_dmean2D[global_id].z, fabs(dL_dG * dG_ddelx * ddelx_dx));
+				atomicAdd(&dL_dmean2D[global_id].w, fabs(dL_dG * dG_ddely * ddely_dy));
 			} else {
 				// // Update gradients w.r.t. center of Gaussian 2D mean position
 				const float dG_ddelx = -G * FilterInvSquare * d.x;
@@ -435,7 +437,7 @@ renderCUDA(
 				atomicAdd(&dL_dmean2D[global_id].x, dL_dG * dG_ddelx); // not scaled
 				atomicAdd(&dL_dmean2D[global_id].y, dL_dG * dG_ddely); // not scaled
 				
-				// Homodirectional gradient
+				// Homodirectional Gradient
 				atomicAdd(&dL_dmean2D[global_id].z, fabs(dL_dG * dG_ddelx * ddelx_dx));
 				atomicAdd(&dL_dmean2D[global_id].w, fabs(dL_dG * dG_ddely * ddely_dy));
 
