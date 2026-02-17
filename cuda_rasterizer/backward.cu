@@ -243,10 +243,10 @@ renderCUDA(
 	float last_alpha = 0;
 	float last_color[C] = { 0 };
 
-	// Gradient of pixel coordinate w.r.t. normalized 
-	// screen-space viewport corrdinates (-1 to 1)
-	// const float ddelx_dx = 0.5 * W;
-	// const float ddely_dy = 0.5 * H;
+	// Gradient of pixel coordinate w.r.t. normalized
+	// screen-space viewport coordinates (-1 to 1).
+	const float ddelx_dx = 0.5f * float(W);
+	const float ddely_dy = 0.5f * float(H);
 
 	// Traverse all Gaussians
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
@@ -424,6 +424,10 @@ renderCUDA(
 				atomicAdd(&dL_dtransMat[global_id * 9 + 6],  dL_dTw.x);
 				atomicAdd(&dL_dtransMat[global_id * 9 + 7],  dL_dTw.y);
 				atomicAdd(&dL_dtransMat[global_id * 9 + 8],  dL_dTw.z);
+
+				// Homodirectional gradient
+				atomicAdd(&dL_dmean2D[global_id].z, fabs(dL_dTu.z * Tw.z * ddelx_dx));
+				atomicAdd(&dL_dmean2D[global_id].w, fabs(dL_dTv.z * Tw.z * ddely_dy));
 			} else {
 				// // Update gradients w.r.t. center of Gaussian 2D mean position
 				const float dG_ddelx = -G * FilterInvSquare * d.x;
@@ -431,9 +435,9 @@ renderCUDA(
 				atomicAdd(&dL_dmean2D[global_id].x, dL_dG * dG_ddelx); // not scaled
 				atomicAdd(&dL_dmean2D[global_id].y, dL_dG * dG_ddely); // not scaled
 				
-				// Homodirectional Gradient 
-				// atomicAdd(&dL_dmean2D[global_id].z, fabs(dL_dG * dG_ddelx * ddelx_dx));
-				// atomicAdd(&dL_dmean2D[global_id].w, fabs(dL_dG * dG_ddely * ddely_dy));
+				// Homodirectional gradient
+				atomicAdd(&dL_dmean2D[global_id].z, fabs(dL_dG * dG_ddelx * ddelx_dx));
+				atomicAdd(&dL_dmean2D[global_id].w, fabs(dL_dG * dG_ddely * ddely_dy));
 
 				atomicAdd(&dL_dtransMat[global_id * 9 + 8],  dL_dz); // propagate depth loss
 			}
@@ -643,9 +647,6 @@ __global__ void preprocessCUDA(
 	float depth = transMats[idx * 9 + 8];
 	dL_dmean2Ds[idx].x = dL_dtransMats[idx * 9 + 2] * depth * 0.5 * float(W); // to ndc 
 	dL_dmean2Ds[idx].y = dL_dtransMats[idx * 9 + 5] * depth * 0.5 * float(H); // to ndc
-	// Homodirectional gradient
-	dL_dmean2Ds[idx].z = fabsf(dL_dtransMats[idx * 9 + 2] * depth * 0.5 * float(W)); // to ndc 
-	dL_dmean2Ds[idx].w = fabsf(dL_dtransMats[idx * 9 + 5] * depth * 0.5 * float(H)); // to ndc
 }
 
 
